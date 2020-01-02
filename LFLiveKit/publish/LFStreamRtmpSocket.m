@@ -69,6 +69,8 @@ SAVC(mp4a);
 @property (nonatomic, assign) BOOL sendVideoHead;
 @property (nonatomic, assign) BOOL sendAudioHead;
 
+@property (nonatomic) unsigned char *headerBody;
+
 @end
 
 @implementation LFStreamRTMPSocket
@@ -120,6 +122,7 @@ SAVC(mp4a);
     if (_rtmp != NULL) {
         PILI_RTMP_Close(_rtmp, &_error);
         PILI_RTMP_Free(_rtmp);
+        _rtmp = NULL;
     }
     [self RTMP264_Connect:(char *)[_stream.url cStringUsingEncoding:NSASCIIStringEncoding]];
 }
@@ -353,46 +356,49 @@ Failed:
 
 - (void)sendVideoHeader:(LFVideoFrame *)videoFrame {
 
-    unsigned char *body = NULL;
+//    unsigned char *body = NULL;
     NSInteger iIndex = 0;
     NSInteger rtmpLength = 1024;
     const char *sps = videoFrame.sps.bytes;
     const char *pps = videoFrame.pps.bytes;
     NSInteger sps_len = videoFrame.sps.length;
     NSInteger pps_len = videoFrame.pps.length;
+    
+    
+    if (!self.headerBody) {
+        self.headerBody = (unsigned char *)malloc(rtmpLength);
+    }
+    memset(self.headerBody, 0, rtmpLength);
 
-    body = (unsigned char *)malloc(rtmpLength);
-    memset(body, 0, rtmpLength);
+    self.headerBody[iIndex++] = 0x17;
+    self.headerBody[iIndex++] = 0x00;
 
-    body[iIndex++] = 0x17;
-    body[iIndex++] = 0x00;
+    self.headerBody[iIndex++] = 0x00;
+    self.headerBody[iIndex++] = 0x00;
+    self.headerBody[iIndex++] = 0x00;
 
-    body[iIndex++] = 0x00;
-    body[iIndex++] = 0x00;
-    body[iIndex++] = 0x00;
-
-    body[iIndex++] = 0x01;
-    body[iIndex++] = sps[1];
-    body[iIndex++] = sps[2];
-    body[iIndex++] = sps[3];
-    body[iIndex++] = 0xff;
+    self.headerBody[iIndex++] = 0x01;
+    self.headerBody[iIndex++] = sps[1];
+    self.headerBody[iIndex++] = sps[2];
+    self.headerBody[iIndex++] = sps[3];
+    self.headerBody[iIndex++] = 0xff;
 
     /*sps*/
-    body[iIndex++] = 0xe1;
-    body[iIndex++] = (sps_len >> 8) & 0xff;
-    body[iIndex++] = sps_len & 0xff;
-    memcpy(&body[iIndex], sps, sps_len);
+    self.headerBody[iIndex++] = 0xe1;
+    self.headerBody[iIndex++] = (sps_len >> 8) & 0xff;
+    self.headerBody[iIndex++] = sps_len & 0xff;
+    memcpy(&self.headerBody[iIndex], sps, sps_len);
     iIndex += sps_len;
 
     /*pps*/
-    body[iIndex++] = 0x01;
-    body[iIndex++] = (pps_len >> 8) & 0xff;
-    body[iIndex++] = (pps_len) & 0xff;
-    memcpy(&body[iIndex], pps, pps_len);
+    self.headerBody[iIndex++] = 0x01;
+    self.headerBody[iIndex++] = (pps_len >> 8) & 0xff;
+    self.headerBody[iIndex++] = (pps_len) & 0xff;
+    memcpy(&self.headerBody[iIndex], pps, pps_len);
     iIndex += pps_len;
 
-    [self sendPacket:RTMP_PACKET_TYPE_VIDEO data:body size:iIndex nTimestamp:0];
-    free(body);
+    [self sendPacket:RTMP_PACKET_TYPE_VIDEO data:self.headerBody size:iIndex nTimestamp:0];
+//    free(body);
 }
 
 - (void)sendVideo:(LFVideoFrame *)frame {
@@ -526,6 +532,7 @@ Failed:
     if (_rtmp != NULL) {
         PILI_RTMP_Close(_rtmp, &_error);
         PILI_RTMP_Free(_rtmp);
+        _rtmp = NULL;
     }
     [self RTMP264_Connect:(char *)[_stream.url cStringUsingEncoding:NSASCIIStringEncoding]];
 }

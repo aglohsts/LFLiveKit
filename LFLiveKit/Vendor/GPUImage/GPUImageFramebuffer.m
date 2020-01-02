@@ -4,6 +4,8 @@
 @interface GPUImageFramebuffer()
 {
     GLuint framebuffer;
+    GLubyte *rawImagePixels;
+    GLubyte *rawImagePixelsBuffer;
 #if TARGET_IPHONE_SIMULATOR || TARGET_OS_IPHONE
     CVPixelBufferRef renderTarget;
     CVOpenGLESTextureRef renderTexture;
@@ -109,6 +111,10 @@ void dataProviderUnlockCallback (void *info, const void *data, size_t size);
 - (void)dealloc
 {
     [self destroyFramebuffer];
+    free(rawImagePixels);
+    rawImagePixels = nil;
+    free(rawImagePixelsBuffer);
+    rawImagePixelsBuffer = nil;
 }
 
 #pragma mark -
@@ -266,6 +272,10 @@ void dataProviderUnlockCallback (void *info, const void *data, size_t size);
         return;
     }
 
+    if (framebufferReferenceCount == 0) {
+        NSLog(@"Tried to overrelease a framebuffer, did you forget to call -useNextFrameForImageCapture before using -imageFromCurrentFramebuffer?");
+        return;
+    }
     NSAssert(framebufferReferenceCount > 0, @"Tried to overrelease a framebuffer, did you forget to call -useNextFrameForImageCapture before using -imageFromCurrentFramebuffer?");
     framebufferReferenceCount--;
     if (framebufferReferenceCount < 1)
@@ -320,7 +330,7 @@ void dataProviderUnlockCallback (void *info, const void *data, size_t size)
         NSUInteger totalBytesForImage = (int)_size.width * (int)_size.height * 4;
         // It appears that the width of a texture must be padded out to be a multiple of 8 (32 bytes) if reading from it using a texture cache
         
-        GLubyte *rawImagePixels;
+//        GLubyte *rawImagePixels;
         
         CGDataProviderRef dataProvider = NULL;
         if ([GPUImageContext supportsFastTextureUpload])
@@ -332,8 +342,10 @@ void dataProviderUnlockCallback (void *info, const void *data, size_t size)
             glFinish();
             CFRetain(renderTarget); // I need to retain the pixel buffer here and release in the data source callback to prevent its bytes from being prematurely deallocated during a photo write operation
             [self lockForReading];
-            rawImagePixels = (GLubyte *)CVPixelBufferGetBaseAddress(renderTarget);
-            dataProvider = CGDataProviderCreateWithData((__bridge_retained void*)self, rawImagePixels, paddedBytesForImage, dataProviderUnlockCallback);
+            if (!rawImagePixelsBuffer) {
+                rawImagePixelsBuffer = (GLubyte *)CVPixelBufferGetBaseAddress(renderTarget);
+            }
+            dataProvider = CGDataProviderCreateWithData((__bridge_retained void*)self, rawImagePixelsBuffer, paddedBytesForImage, dataProviderUnlockCallback);
             [[GPUImageContext sharedFramebufferCache] addFramebufferToActiveImageCaptureList:self]; // In case the framebuffer is swapped out on the filter, need to have a strong reference to it somewhere for it to hang on while the image is in existence
 #else
 #endif
@@ -341,7 +353,9 @@ void dataProviderUnlockCallback (void *info, const void *data, size_t size)
         else
         {
             [self activateFramebuffer];
-            rawImagePixels = (GLubyte *)malloc(totalBytesForImage);
+            if (!rawImagePixels) {
+                 rawImagePixels = (GLubyte *)malloc(totalBytesForImage);
+            }
             glReadPixels(0, 0, (int)_size.width, (int)_size.height, GL_RGBA, GL_UNSIGNED_BYTE, rawImagePixels);
             dataProvider = CGDataProviderCreateWithData(NULL, rawImagePixels, totalBytesForImage, dataProviderReleaseCallback);
             [self unlock]; // Don't need to keep this around anymore

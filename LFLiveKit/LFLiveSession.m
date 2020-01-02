@@ -83,7 +83,7 @@
     if (self = [super init]) {
         _audioConfiguration = audioConfiguration;
         _videoConfiguration = videoConfiguration;
-        _adaptiveBitrate = NO;
+        _adaptiveBitrate = YES;
         _captureType = captureType;
     }
     return self;
@@ -100,6 +100,39 @@
     _streamInfo = streamInfo;
     _streamInfo.videoConfiguration = _videoConfiguration;
     _streamInfo.audioConfiguration = _audioConfiguration;
+    [self.socket start];
+}
+
+- (void)pauseLiveUploading {
+    
+//    self.uploading = NO;
+    _videoCaptureSource.running = false;
+}
+
+- (void)restartLive:(LFLiveStreamInfo *)streamInfo {
+    if (!streamInfo) return;
+    
+    // stop the capture source, both video and audio
+//    self.uploading = NO;
+    // reset video resolution configuration
+    // rtmpUrl
+    _streamInfo = streamInfo;
+    _streamInfo.videoConfiguration = _videoConfiguration;
+    _streamInfo.audioConfiguration = _audioConfiguration;
+
+    _videoCaptureSource.running = true;
+    /*
+    if
+        check the logic flow of setStreamingConfig
+    else
+        reinit capture and encoder with new configuration
+    */
+    
+    // start the capture source, both video and audio
+
+//    self.uploading = YES;
+
+    // do socket reconnect job ?
     [self.socket start];
 }
 
@@ -201,13 +234,22 @@
         NSUInteger videoBitRate = [self.videoEncoder videoBitRate];
         if (status == LFLiveBuffferDecline) {
             if (videoBitRate < _videoConfiguration.videoMaxBitRate) {
-                videoBitRate = videoBitRate + 50 * 1000;
-                [self.videoEncoder setVideoBitRate:videoBitRate];
+//                videoBitRate = videoBitRate + 50 * 1000;
+//                [self.videoEncoder setVideoBitRate:videoBitRate];
                 NSLog(@"Increase bitrate %@", @(videoBitRate));
             }
         } else {
             if (videoBitRate > self.videoConfiguration.videoMinBitRate) {
-                videoBitRate = videoBitRate - 100 * 1000;
+//                videoBitRate = videoBitRate - 200 * 1000;
+                videoBitRate = self.videoConfiguration.videoMinBitRate;
+                if (videoBitRate <= self.videoConfiguration.videoMinBitRate) {
+                    videoBitRate = self.videoConfiguration.videoMinBitRate;
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (self.delegate && [self.delegate respondsToSelector:@selector(liveSession:networkCode:)]) {
+                            [self.delegate liveSession:self networkCode:YES];
+                        }
+                    });
+                }
                 [self.videoEncoder setVideoBitRate:videoBitRate];
                 NSLog(@"Decline bitrate %@", @(videoBitRate));
             }
@@ -384,6 +426,15 @@
     return _videoEncoder;
 }
 
+- (void)setBitRate:(NSInteger)bitRate {
+    [_videoEncoder setVideoBitRate:bitRate*1000];
+}
+
+- (void)setFrameRate:(NSInteger)frameRate {
+    [_videoEncoder setVideoFrameRate:frameRate];
+    [self.videoCaptureSource setVideoFrameRate:frameRate];
+}
+
 - (id<LFStreamSocket>)socket {
     if (!_socket) {
         _socket = [[LFStreamRTMPSocket alloc] initWithStream:self.streamInfo reconnectInterval:self.reconnectInterval reconnectCount:self.reconnectCount];
@@ -423,6 +474,80 @@
     }else{
         return YES;
     }
+}
+- (void)setFilterImage:(UIImage *)image {
+    [self.videoCaptureSource setPicture:image];
+}
+- (void)updateUI {
+    [self.videoCaptureSource updateUI];
+}
+- (void)reloadFilter {
+    [self.videoCaptureSource reloadFilter];
+}
+- (void)updateTicker {
+    @autoreleasepool {
+        [self.videoCaptureSource updateTicker];
+    }
+}
+
+- (void)setTickerView:(UIView *)tickerView{
+    [self.videoCaptureSource setTickerView:tickerView];
+}
+
+- (nullable UIView*)tickerView{
+    return self.videoCaptureSource.tickerView;
+}
+
+- (void)setBeauty:(CGFloat)beauty {
+    [self.videoCaptureSource setBeauty:beauty];
+    
+}
+
+- (CGFloat)beauty {
+    return self.videoCaptureSource.beauty;
+}
+
+- (void)setTone:(CGFloat)tone {
+    [self.videoCaptureSource setTone:tone];
+}
+
+- (CGFloat)tone {
+    return self.videoCaptureSource.tone;
+}
+
+- (LFLiveVideoConfiguration *) getVideoConfiguration {
+    
+    return _videoConfiguration;
+}
+
+- (void) setStreamingConfig:(BOOL)isSquare: (LFLiveVideoQuality)videoQuality: (int)bps: (int)fps: (CGSize)videoSize {
+    if (isSquare) {
+        
+        _videoConfiguration.sessionPreset = LFCaptureSessionPreset720x720;
+    } else {
+        
+        _videoConfiguration.sessionPreset = LFCaptureSessionPresetScreen;
+    }
+    
+    _videoConfiguration.videoFrameRate = fps;
+    _videoConfiguration.videoMaxFrameRate = fps;
+    _videoConfiguration.videoMinFrameRate = fps;
+    _videoConfiguration.videoBitRate = bps * 1000;
+    _videoConfiguration.videoMaxBitRate = bps * 1000;
+    _videoConfiguration.videoMinBitRate = bps * 1000;
+    _videoConfiguration.videoSize = videoSize;
+    
+    [self.videoCaptureSource setResolution:videoSize.width];
+}
+
+- (void) setVideoSize:(CGSize)videoSize {
+    
+    _videoConfiguration.videoSize = videoSize;
+}
+
+- (void)updateCropRect: (CGFloat)resolution {
+    
+    [self.videoCaptureSource updateCropRect:resolution];
 }
 
 @end

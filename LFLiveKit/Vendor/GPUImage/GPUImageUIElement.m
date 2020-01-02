@@ -8,6 +8,9 @@
     CGSize previousLayerSizeInPixels;
     CMTime time;
     NSTimeInterval actualTimeOfLastUpdate;
+    GLubyte *imageData;
+    CGColorSpaceRef genericRGBColorspace;
+    CGContextRef imageContext;
 }
 
 @end
@@ -17,6 +20,21 @@
 #pragma mark -
 #pragma mark Initialization and teardown
 
+- (void)dealloc {
+    if (imageContext != nil) {
+        CGContextRelease(imageContext);
+        imageContext = nil;
+    }
+    if (genericRGBColorspace != nil) {
+        CGColorSpaceRelease(genericRGBColorspace);
+        genericRGBColorspace = nil;
+    }
+    if (imageData != nil) {
+        free(imageData);
+        imageData = nil;
+    }
+}
+
 - (id)initWithView:(UIView *)inputView;
 {
     if (!(self = [super init]))
@@ -24,6 +42,7 @@
 		return nil;
     }
     
+    NSLog(@"initWithView");
     view = inputView;
     layer = inputView.layer;
 
@@ -35,6 +54,7 @@
 
 - (id)initWithLayer:(CALayer *)inputLayer;
 {
+    NSLog(@"initWithLayer");
     if (!(self = [super init]))
     {
 		return nil;
@@ -60,7 +80,9 @@
 
 - (void)update;
 {
-    [self updateWithTimestamp:kCMTimeIndefinite];
+    @autoreleasepool {
+        [self updateWithTimestamp:kCMTimeIndefinite];
+    }
 }
 
 - (void)updateUsingCurrentTime;
@@ -84,19 +106,37 @@
     
     CGSize layerPixelSize = [self layerSizeInPixels];
     
-    GLubyte *imageData = (GLubyte *) calloc(1, (int)layerPixelSize.width * (int)layerPixelSize.height * 4);
-    
-    CGColorSpaceRef genericRGBColorspace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef imageContext = CGBitmapContextCreate(imageData, (int)layerPixelSize.width, (int)layerPixelSize.height, 8, (int)layerPixelSize.width * 4, genericRGBColorspace,  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+    if (self->imageData != nil) {
+        imageData = (GLubyte *) memset(imageData, 0, (int)layerPixelSize.width * (int)layerPixelSize.height * 4);
+    }
+    else {
+        imageData = (GLubyte *) calloc(1, (int)layerPixelSize.width * (int)layerPixelSize.height * 4);
+    }
+//    GLubyte *imageData = (GLubyte *) calloc(1, (int)layerPixelSize.width * (int)layerPixelSize.height * 4);
+//    if (imageContext == nil ) {
+//        genericRGBColorspace = CGColorSpaceCreateDeviceRGB();
+//        imageContext = CGBitmapContextCreate(imageData, (int)layerPixelSize.width, (int)layerPixelSize.height, 8, (int)layerPixelSize.width * 4, genericRGBColorspace,  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+//    }
+    if (!genericRGBColorspace) {
+        genericRGBColorspace = CGColorSpaceCreateDeviceRGB();
+        imageContext = CGBitmapContextCreate(imageData, (int)layerPixelSize.width, (int)layerPixelSize.height, 8, (int)layerPixelSize.width * 4, genericRGBColorspace,  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+        CGContextTranslateCTM(imageContext, 0.0f, layerPixelSize.height);
+        CGContextScaleCTM(imageContext, layer.contentsScale, -layer.contentsScale);
+    }
+
+//    CGContextRef imageContext = CGBitmapContextCreate(imageData, (int)layerPixelSize.width, (int)layerPixelSize.height, 8, (int)layerPixelSize.width * 4, genericRGBColorspace,  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
     //    CGContextRotateCTM(imageContext, M_PI_2);
-    CGContextTranslateCTM(imageContext, 0.0f, layerPixelSize.height);
-    CGContextScaleCTM(imageContext, layer.contentsScale, -layer.contentsScale);
+    
     //        CGContextSetBlendMode(imageContext, kCGBlendModeCopy); // From Technical Q&A QA1708: http://developer.apple.com/library/ios/#qa/qa1708/_index.html
     
+//    NSDateFormatter *dateFormatter=[[NSDateFormatter alloc] init];
+//    [dateFormatter setDateFormat:@"yyyy-MM-dd HH:mm:ssSSS"];
+    // or @"yyyy-MM-dd hh:mm:ss a" if you prefer the time with AM/PM
+//    NSLog(@"%@",[dateFormatter stringFromDate:[NSDate date]]);
     [layer renderInContext:imageContext];
     
-    CGContextRelease(imageContext);
-    CGColorSpaceRelease(genericRGBColorspace);
+//    CGContextRelease(imageContext);
+//    CGColorSpaceRelease(genericRGBColorspace);
     
     // TODO: This may not work
     outputFramebuffer = [[GPUImageContext sharedFramebufferCache] fetchFramebufferForSize:layerPixelSize textureOptions:self.outputTextureOptions onlyTexture:YES];
@@ -106,7 +146,7 @@
     // no need to use self.outputTextureOptions here, we always need these texture options
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int)layerPixelSize.width, (int)layerPixelSize.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, imageData);
     
-    free(imageData);
+//    free(imageData);
     for (id<GPUImageInput> currentTarget in targets)
     {
         if (currentTarget != self.targetToIgnoreForUpdates)
@@ -119,6 +159,7 @@
             [currentTarget newFrameReadyAtTime:frameTime atIndex:textureIndexOfTarget];
         }
     }
+    [outputFramebuffer unlock];
 }
 
 @end

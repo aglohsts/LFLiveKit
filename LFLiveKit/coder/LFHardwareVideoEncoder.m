@@ -45,10 +45,15 @@
 
 - (void)resetCompressionSession {
     if (compressionSession) {
-        VTCompressionSessionCompleteFrames(compressionSession, kCMTimeInvalid);
-
-        VTCompressionSessionInvalidate(compressionSession);
-        CFRelease(compressionSession);
+        if (compressionSession) {
+            VTCompressionSessionCompleteFrames(compressionSession, kCMTimeInvalid);
+        }
+        if (compressionSession) {
+            VTCompressionSessionInvalidate(compressionSession);
+        }
+        if (compressionSession) {
+            CFRelease(compressionSession);
+        }
         compressionSession = NULL;
     }
 
@@ -78,6 +83,14 @@
     NSArray *limit = @[@(videoBitRate * 1.5/8), @(1)];
     VTSessionSetProperty(compressionSession, kVTCompressionPropertyKey_DataRateLimits, (__bridge CFArrayRef)limit);
     _currentVideoBitRate = videoBitRate;
+}
+
+- (void)setVideoFrameRate:(NSInteger)videoFrameRate {
+    if(_isBackGround) return;
+    VTSessionSetProperty(compressionSession, kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, (__bridge CFTypeRef)@(_configuration.videoMaxKeyframeInterval/videoFrameRate));
+    VTSessionSetProperty(compressionSession, kVTCompressionPropertyKey_ExpectedFrameRate, (__bridge CFTypeRef)@(videoFrameRate));
+    _configuration.videoFrameRate = videoFrameRate;
+    _configuration.videoMaxKeyframeInterval = _configuration.videoFrameRate*2;
 }
 
 - (NSInteger)videoBitRate {

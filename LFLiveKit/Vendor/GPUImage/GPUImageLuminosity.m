@@ -163,6 +163,12 @@ NSString *const kGPUImageLuminosityFragmentShaderString = SHADER_STRING
     return self;
 }
 
+- (void)dealloc
+{
+    free(rawImagePixels);
+    rawImagePixels = nil;
+}
+
 - (void)initializeSecondaryAttributes;
 {
     [secondFilterProgram addAttribute:@"position"];

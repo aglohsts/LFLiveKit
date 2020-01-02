@@ -167,11 +167,11 @@ NSString *const LFAudioComponentFailedToCreateNotification = @"LFAudioComponentF
         break;
     }
     NSLog(@"handleRouteChange reason is %@", seccReason);
-
-    AVAudioSessionPortDescription *input = [[session.currentRoute.inputs count] ? session.currentRoute.inputs : nil objectAtIndex:0];
-    if (input.portType == AVAudioSessionPortHeadsetMic) {
-
-    }
+    
+//    AVAudioSessionPortDescription *input = [[session.currentRoute.inputs count] ? session.currentRoute.inputs : nil objectAtIndex:0];
+//    if (input.portType == AVAudioSessionPortHeadsetMic) {
+//
+//    }
 }
 
 - (void)handleInterruption:(NSNotification *)notification {

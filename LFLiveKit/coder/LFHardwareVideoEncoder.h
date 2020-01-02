@@ -16,5 +16,4 @@
 ///=============================================================================
 - (nullable instancetype)init UNAVAILABLE_ATTRIBUTE;
 + (nullable instancetype)new UNAVAILABLE_ATTRIBUTE;
-
 @end

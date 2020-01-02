@@ -30,9 +30,18 @@
 
 @property (nonatomic, strong) GPUImageAlphaBlendFilter *blendFilter;
 @property (nonatomic, strong) GPUImageUIElement *uiElementInput;
+
 @property (nonatomic, strong) UIView *waterMarkContentView;
 
 @property (nonatomic, strong) GPUImageMovieWriter *movieWriter;
+
+@property (nonatomic, strong) GPUImagePicture *filterPicture;
+@property (nonatomic, strong) GPUImageChromaKeyBlendFilter *chromaFilter;
+
+
+@property (nonatomic, strong) GPUImageAlphaBlendFilter *blendFilter2;
+@property (nonatomic, strong) GPUImageUIElement *tickerElement;
+@property (nonatomic, strong) UIView *tickerContentView;
 
 @end
 
@@ -41,27 +50,31 @@
 @synthesize beautyLevel = _beautyLevel;
 @synthesize brightLevel = _brightLevel;
 @synthesize zoomScale = _zoomScale;
+@synthesize resolution = _resolution;
 
 #pragma mark -- LifeCycle
 - (instancetype)initWithVideoConfiguration:(LFLiveVideoConfiguration *)configuration {
     if (self = [super init]) {
         _configuration = configuration;
-
+        
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterBackground:) name:UIApplicationWillResignActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterForeground:) name:UIApplicationDidBecomeActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(statusBarChanged:) name:UIApplicationWillChangeStatusBarOrientationNotification object:nil];
         
         self.beautyFace = YES;
         self.beautyLevel = 0.5;
-        self.brightLevel = 0.5;
+        self.brightLevel = 0.3;
+        self.beautydefault = 0.5;
+        self.tonedefault = 0.4;
         self.zoomScale = 1.0;
         self.mirror = YES;
+        
     }
     return self;
 }
 
 - (void)dealloc {
-    [UIApplication sharedApplication].idleTimerDisabled = NO;
+//    [UIApplication sharedApplication].idleTimerDisabled = NO;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_videoCamera stopCameraCapture];
     if(_gpuImageView){
@@ -74,10 +87,18 @@
 
 - (GPUImageVideoCamera *)videoCamera{
     if(!_videoCamera){
-        _videoCamera = [[GPUImageVideoCamera alloc] initWithSessionPreset:_configuration.avSessionPreset cameraPosition:AVCaptureDevicePositionFront];
+        BOOL isFrontCamera = [[NSUserDefaults standardUserDefaults] boolForKey:@"isFrontCamera"];
+        if (isFrontCamera) {
+            _videoCamera = [[GPUImageVideoCamera alloc] initWithSessionPreset:_configuration.avSessionPreset cameraPosition:AVCaptureDevicePositionFront];
+            self.videoCamera.horizontallyMirrorFrontFacingCamera = YES;
+        }
+        else {
+            _videoCamera = [[GPUImageVideoCamera alloc] initWithSessionPreset:_configuration.avSessionPreset cameraPosition:AVCaptureDevicePositionBack];
+                _videoCamera.horizontallyMirrorFrontFacingCamera = NO;
+                _videoCamera.horizontallyMirrorRearFacingCamera = NO;
+        }
         _videoCamera.outputImageOrientation = _configuration.outputImageOrientation;
-        _videoCamera.horizontallyMirrorFrontFacingCamera = NO;
-        _videoCamera.horizontallyMirrorRearFacingCamera = NO;
+
         _videoCamera.frameRate = (int32_t)_configuration.videoFrameRate;
     }
     return _videoCamera;
@@ -88,12 +109,11 @@
     _running = running;
     
     if (!_running) {
-        [UIApplication sharedApplication].idleTimerDisabled = NO;
+//        [UIApplication sharedApplication].idleTimerDisabled = NO;
         [self.videoCamera stopCameraCapture];
         if(self.saveLocalVideo) [self.movieWriter finishRecording];
     } else {
         [UIApplication sharedApplication].idleTimerDisabled = YES;
-        [self reloadFilter];
         [self.videoCamera startCameraCapture];
         if(self.saveLocalVideo) [self.movieWriter startRecording];
     }
@@ -210,6 +230,9 @@
         _warterMarkView = nil;
     }
     _warterMarkView = warterMarkView;
+    
+    _warterMarkView.transform = CGAffineTransformMakeScale(self.waterMarkContentView.frame.size.width/warterMarkView.frame.size.width, self.waterMarkContentView.frame.size.height/warterMarkView.frame.size.height);
+    _warterMarkView.frame = self.waterMarkContentView.frame;
     self.blendFilter.mix = warterMarkView.alpha;
     [self.waterMarkContentView addSubview:_warterMarkView];
     [self reloadFilter];
@@ -222,6 +245,26 @@
     return _uiElementInput;
 }
 
+- (void)setTickerView:(UIView *)tickerView{
+    if(_tickerView && _tickerView.superview){
+        [_tickerView removeFromSuperview];
+        _tickerView = nil;
+    }
+    _tickerView = tickerView;
+    _tickerView.transform = CGAffineTransformMakeScale(self.tickerContentView.frame.size.width/tickerView.frame.size.width, self.tickerContentView.frame.size.width/tickerView.frame.size.width);
+    _tickerView.frame = self.tickerContentView.frame;
+    
+    self.blendFilter2.mix = _tickerView.alpha;
+    [self.tickerContentView addSubview:_tickerView];
+    [self reloadFilter];
+}
+- (GPUImageUIElement *)tickerElement {
+    if (!_tickerElement) {
+        _tickerElement = [[GPUImageUIElement alloc] initWithView:self.tickerContentView];
+    }
+    return _tickerElement;
+}
+
 - (GPUImageAlphaBlendFilter *)blendFilter{
     if(!_blendFilter){
         _blendFilter = [[GPUImageAlphaBlendFilter alloc] init];
@@ -230,20 +273,37 @@
     }
     return _blendFilter;
 }
+- (GPUImageAlphaBlendFilter *)blendFilter2{
+    if(!_blendFilter2){
+        _blendFilter2 = [[GPUImageAlphaBlendFilter alloc] init];
+        _blendFilter2.mix = 1.0;
+        [_blendFilter2 disableSecondFrameCheck];
+    }
+    return _blendFilter2;
+}
+
 
 - (UIView *)waterMarkContentView{
-    if(!_waterMarkContentView){
+    if(!_waterMarkContentView) {
         _waterMarkContentView = [UIView new];
         _waterMarkContentView.frame = CGRectMake(0, 0, self.configuration.videoSize.width, self.configuration.videoSize.height);
         _waterMarkContentView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     }
     return _waterMarkContentView;
 }
+- (UIView *)tickerContentView{
+    if(!_tickerContentView) {
+        _tickerContentView = [UIView new];
+        _tickerContentView.frame = CGRectMake(0, 0, self.configuration.videoSize.width, self.configuration.videoSize.height);
+        _tickerContentView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    return _tickerContentView;
+}
 
 - (GPUImageView *)gpuImageView{
     if(!_gpuImageView){
         _gpuImageView = [[GPUImageView alloc] initWithFrame:[UIScreen mainScreen].bounds];
-        [_gpuImageView setFillMode:kGPUImageFillModePreserveAspectRatioAndFill];
+        [_gpuImageView setFillMode:kGPUImageFillModeStretch];
         [_gpuImageView setAutoresizingMask:UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight];
     }
     return _gpuImageView;
@@ -282,10 +342,15 @@
 - (void)reloadFilter{
     [self.filter removeAllTargets];
     [self.blendFilter removeAllTargets];
+    [self.blendFilter2 removeAllTargets];
     [self.uiElementInput removeAllTargets];
     [self.videoCamera removeAllTargets];
     [self.output removeAllTargets];
     [self.cropfilter removeAllTargets];
+    
+    [self.tickerElement removeAllTargets];
+    //    [self.chromaFilter removeAllTargets];
+    //    [self.filterPicture removeAllTargets];
     
     if (self.beautyFace) {
         self.output = [[LFGPUImageEmptyFilter alloc] init];
@@ -306,19 +371,68 @@
         self.cropfilter = [[GPUImageCropFilter alloc] initWithCropRegion:cropRect];
         [self.videoCamera addTarget:self.cropfilter];
         [self.cropfilter addTarget:self.filter];
-    }else{
+    }
+    else if (self.configuration.sessionPreset == LFCaptureSessionPreset720x720) {
+        //        [self.videoCamera addTarget:self.filter];
+        CGRect cropRect = CGRectMake(0, 0.218, 1, 0.562);
+        self.cropfilter = [[GPUImageCropFilter alloc] initWithCropRegion:cropRect];
+        [self.videoCamera addTarget:self.cropfilter];
+        [self.cropfilter addTarget:self.filter];
+    }
+    else if (self.configuration.sessionPreset == LFCaptureSessionPresetScreen) {
+        CGFloat width = self.configuration.videoSize.width;
+        CGRect cropRect;
+        
+        if (width > 0) {
+            
+            cropRect = CGRectMake(0, 0, 1, 1);
+            
+        } else {
+            
+            if (width > 720) {
+                cropRect = CGRectMake(0, (1-720/width)/2, 1, 720/width);
+            }
+            else {
+                cropRect = CGRectMake((1.0 - width/720)/2, 0, width/720, 1);
+            }
+        }
+        self.cropfilter = [[GPUImageCropFilter alloc] initWithCropRegion:cropRect];
+        [self.videoCamera addTarget:self.cropfilter];
+        [self.cropfilter addTarget:self.filter];
+    }
+    else {
         [self.videoCamera addTarget:self.filter];
     }
     
     //< 添加水印
     if(self.warterMarkView){
-        [self.filter addTarget:self.blendFilter];
-        [self.uiElementInput addTarget:self.blendFilter];
-        [self.blendFilter addTarget:self.gpuImageView];
+        if (self.chromaFilter!=nil) {
+            // filter color
+            [self.filter addTarget:self.chromaFilter];
+            [self.chromaFilter addTarget:self.blendFilter];
+            [self.filterPicture addTarget:self.chromaFilter];
+            [self.uiElementInput addTarget:self.blendFilter];
+            
+            [self.blendFilter addTarget:self.blendFilter2];
+            [self.tickerElement addTarget:self.blendFilter2];
+            [self.blendFilter2 addTarget:self.gpuImageView];
+            [self.filter addTarget:self.output];
+        }
+        else {
+            [self.filter addTarget:self.blendFilter];
+//            [self.tickerElement addTarget:self.blendFilter];
+            [self.uiElementInput addTarget:self.blendFilter];
+            [self.blendFilter addTarget:self.blendFilter2];
+            [self.tickerElement addTarget:self.blendFilter2];
+            
+            [self.blendFilter2 addTarget:self.gpuImageView];
+            [self.filter addTarget:self.output];
+        }
+        
         if(self.saveLocalVideo) [self.blendFilter addTarget:self.movieWriter];
-        [self.filter addTarget:self.output];
         [self.uiElementInput update];
-    }else{
+    }
+    else {
         [self.filter addTarget:self.output];
         [self.output addTarget:self.gpuImageView];
         if(self.saveLocalVideo) [self.output addTarget:self.movieWriter];
@@ -327,6 +441,7 @@
     [self.filter forceProcessingAtSize:self.configuration.videoSize];
     [self.output forceProcessingAtSize:self.configuration.videoSize];
     [self.blendFilter forceProcessingAtSize:self.configuration.videoSize];
+    [self.blendFilter2 forceProcessingAtSize:self.configuration.videoSize];
     [self.uiElementInput forceProcessingAtSize:self.configuration.videoSize];
     
     
@@ -342,8 +457,28 @@
     if(self.mirror && self.captureDevicePosition == AVCaptureDevicePositionFront){
         self.videoCamera.horizontallyMirrorFrontFacingCamera = YES;
     }else{
-        self.videoCamera.horizontallyMirrorFrontFacingCamera = NO;
+        BOOL isFrontCamera = [[NSUserDefaults standardUserDefaults] boolForKey:@"isFrontCamera"];
+        if (!isFrontCamera) {
+            self.videoCamera.horizontallyMirrorFrontFacingCamera = NO;
+        }
     }
+}
+
+- (void)setPicture:(UIImage *)image {
+    if( image!=nil ) {
+        if(self.chromaFilter == nil) {
+            self.chromaFilter = [[GPUImageChromaKeyBlendFilter alloc] init];
+            [self.chromaFilter setColorToReplaceRed:0.0 green:1.0 blue:0.0];
+        }
+        [self.chromaFilter useNextFrameForImageCapture];
+        self.filterPicture = [[GPUImagePicture alloc] initWithImage:image smoothlyScaleOutput:YES];
+        [self.filterPicture processImage];
+    }
+    else {
+        self.filterPicture = nil;
+        self.chromaFilter = nil;
+    }
+    [self reloadFilter];
 }
 
 #pragma mark Notification
@@ -364,7 +499,7 @@
 - (void)statusBarChanged:(NSNotification *)notification {
     NSLog(@"UIApplicationWillChangeStatusBarOrientationNotification. UserInfo: %@", notification.userInfo);
     UIInterfaceOrientation statusBar = [[UIApplication sharedApplication] statusBarOrientation];
-
+    
     if(self.configuration.autorotate){
         if (self.configuration.landscape) {
             if (statusBar == UIInterfaceOrientationLandscapeLeft) {
@@ -379,6 +514,83 @@
                 self.videoCamera.outputImageOrientation = UIInterfaceOrientationPortrait;
             }
         }
+    }
+}
+- (void)updateUI {
+    if (self.uiElementInput!=nil) {
+        [self.uiElementInput update];
+    }
+}
+- (void)updateTicker {
+    if (self.tickerElement!=nil) {
+        @autoreleasepool {
+            [self.tickerElement update];
+        }
+    }
+}
+
+- (CGFloat)beauty {
+    return self.beautydefault;
+}
+
+- (void)setBeauty:(CGFloat)beauty {
+    self.beautydefault = beauty;
+    if (self.beautyFilter) {
+        self.beautyFilter.toneLevel = self.tonedefault;
+        self.beautyFilter.beautyLevel = self.beautydefault;
+        [self.beautyFilter setBeautyLevel:beauty];
+    }
+}
+
+- (CGFloat)tone {
+    return self.tonedefault;
+}
+
+- (void)setTone:(CGFloat)tone {
+    self.tonedefault = tone;
+    if (self.beautyFilter) {
+        self.beautyFilter.toneLevel = self.tonedefault;
+        self.beautyFilter.beautyLevel = self.beautydefault;
+        [self.beautyFilter setBeautyLevel:self.beautydefault];
+    }
+}
+
+- (CGFloat)resolution {
+    
+    return _resolution ? _resolution : 720;
+}
+
+- (void)setResolution:(CGFloat)resolution {
+    
+    _resolution = resolution;
+}
+
+- (void)updateCropRect: (CGFloat)resolution {
+    
+    if (self.configuration.sessionPreset == LFCaptureSessionPreset720x720) {
+        //        [self.videoCamera addTarget:self.filter];
+        CGRect cropRect = CGRectMake(0, 0.218, 1, 0.562);
+        [self.cropfilter setCropRegion:cropRect];
+        [self.videoCamera addTarget:self.cropfilter];
+        [self.cropfilter addTarget:self.filter];
+    }
+    else if (self.configuration.sessionPreset == LFCaptureSessionPresetScreen) {
+        CGFloat width = self.configuration.videoSize.width;
+        CGRect cropRect;
+        
+        NSLog(@"!!!!!%f", resolution);
+        
+        if (width > resolution) {
+            
+            cropRect = CGRectMake(0, (1-resolution/width)/2, 1, resolution/width);
+        }
+        else {
+            cropRect = CGRectMake((1.0 - width/resolution)/2, 0, width/resolution, 1);
+        }
+
+        [self.cropfilter setCropRegion:cropRect];
+        [self.videoCamera addTarget:self.cropfilter];
+        [self.cropfilter addTarget:self.filter];
     }
 }
 

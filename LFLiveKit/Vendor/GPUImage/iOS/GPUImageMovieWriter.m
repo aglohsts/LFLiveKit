@@ -35,6 +35,8 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     BOOL audioEncodingIsFinished, videoEncodingIsFinished;
 
     BOOL isRecording;
+    
+    CMSampleTimingInfo* pInfo;
 }
 
 // Movie recording
@@ -148,7 +150,10 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
 - (void)dealloc;
 {
     [self destroyDataFBO];
-
+    if (pInfo) {
+        free(pInfo);
+        pInfo = nil;
+    }
 #if !OS_OBJECT_USE_OBJC
     if( audioQueue != NULL )
     {
@@ -998,7 +1003,10 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
 - (CMSampleBufferRef)adjustTime:(CMSampleBufferRef) sample by:(CMTime) offset {
     CMItemCount count;
     CMSampleBufferGetSampleTimingInfoArray(sample, 0, nil, &count);
-    CMSampleTimingInfo* pInfo = malloc(sizeof(CMSampleTimingInfo) * count);
+//    CMSampleTimingInfo* pInfo = malloc(sizeof(CMSampleTimingInfo) * count);
+    if (!pInfo) {
+        pInfo = malloc(sizeof(CMSampleTimingInfo) * count);
+    }
     CMSampleBufferGetSampleTimingInfoArray(sample, count, pInfo, &count);
     
     for (CMItemCount i = 0; i < count; i++) {
@@ -1009,7 +1017,6 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     CMSampleBufferRef sout;
     CMSampleBufferCreateCopyWithNewTiming(nil, sample, count, pInfo, &sout);
     free(pInfo);
-    
     return sout;
 }
 

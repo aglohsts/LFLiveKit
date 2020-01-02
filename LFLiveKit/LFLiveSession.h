@@ -15,14 +15,14 @@
 #import "LFLiveAudioConfiguration.h"
 #import "LFLiveVideoConfiguration.h"
 #import "LFLiveDebug.h"
-
+#import "LFH264VideoEncoder.h"
 
 
 typedef NS_ENUM(NSInteger,LFLiveCaptureType) {
-    LFLiveCaptureAudio,         //< capture only audio
-    LFLiveCaptureVideo,         //< capture onlt video
-    LFLiveInputAudio,           //< only audio (External input audio)
-    LFLiveInputVideo,           //< only video (External input video)
+    LFLiveCaptureAudio,         ///< capture only audio
+    LFLiveCaptureVideo,         ///< capture onlt video
+    LFLiveInputAudio,           ///< only audio (External input audio)
+    LFLiveInputVideo,           ///< only video (External input video)
 };
 
 
@@ -49,6 +49,9 @@ typedef NS_ENUM(NSInteger,LFLiveCaptureTypeMask) {
 - (void)liveSession:(nullable LFLiveSession *)session debugInfo:(nullable LFLiveDebug *)debugInfo;
 /** callback socket errorcode */
 - (void)liveSession:(nullable LFLiveSession *)session errorCode:(LFLiveSocketErrorCode)errorCode;
+
+/** callback socket network min */
+- (void)liveSession:(nullable LFLiveSession *)session networkCode:(BOOL)isShowNetworkFail;
 @end
 
 @class LFLiveStreamInfo;
@@ -131,8 +134,8 @@ typedef NS_ENUM(NSInteger,LFLiveCaptureTypeMask) {
 ///=============================================================================
 /// @name Initializer
 ///=============================================================================
-- (nullable instancetype)init UNAVAILABLE_ATTRIBUTE;
-+ (nullable instancetype)new UNAVAILABLE_ATTRIBUTE;
+- (nonnull instancetype)init UNAVAILABLE_ATTRIBUTE;
++ (nonnull instancetype)new UNAVAILABLE_ATTRIBUTE;
 
 /**
    The designated initializer. Multiple instances with the same configuration will make the
@@ -157,6 +160,26 @@ typedef NS_ENUM(NSInteger,LFLiveCaptureTypeMask) {
 
 /** support outer input pcm audio(set LFLiveCaptureTypeMask) .*/
 - (void)pushAudio:(nullable NSData*)audioData;
+
+- (void)setFilterImage:(UIImage *)image;
+- (void)updateUI;
+- (void)reloadFilter;
+- (void)updateTicker;
+- (LFLiveVideoConfiguration *) getVideoConfiguration;
+- (void) setStreamingConfig:(BOOL)isSquare: (LFLiveVideoQuality)videoQuality: (int)bps: (int)fps: (CGSize)videoSize;
+- (void) setVideoSize:(CGSize)videoSize;
+- (void)updateCropRect: (CGFloat)resolution;
+
+- (void)pauseLiveUploading;
+- (void)restartLive:(LFLiveStreamInfo *)streamInfo;
+
+@property (nonatomic, strong, nullable) UIView *tickerView;
+
+@property (nonatomic, assign) CGFloat beauty;
+@property (nonatomic, assign) CGFloat tone;
+
+- (void)setBitRate:(NSInteger)bitRate;
+- (void)setFrameRate:(NSInteger)frameRate;
 
 @end
 

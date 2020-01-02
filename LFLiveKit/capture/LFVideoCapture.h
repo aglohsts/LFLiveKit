@@ -80,5 +80,21 @@
    capture unstable.
  */
 - (nullable instancetype)initWithVideoConfiguration:(nullable LFLiveVideoConfiguration *)configuration NS_DESIGNATED_INITIALIZER;
+- (void)setPicture:(UIImage *)image;
+- (void)updateUI;
+- (void)reloadFilter;
+- (void)updateTicker;
+- (void)updateCropRect: (CGFloat)resolution;
+- (void)setVideoFrameRate:(NSInteger)videoFrameRate;
+
+@property (nonatomic, strong, nullable) UIView *tickerView;
+
+@property (nonatomic, assign) CGFloat beauty;
+@property (nonatomic, assign) CGFloat tone;
+
+@property (nonatomic, assign) CGFloat beautydefault;
+@property (nonatomic, assign) CGFloat tonedefault;
+
+@property (nonatomic, assign) CGFloat resolution;
 
 @end

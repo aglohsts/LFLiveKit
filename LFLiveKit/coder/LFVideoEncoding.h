@@ -23,6 +23,7 @@
 - (void)encodeVideoData:(nullable CVPixelBufferRef)pixelBuffer timeStamp:(uint64_t)timeStamp;
 @optional
 @property (nonatomic, assign) NSInteger videoBitRate;
+- (void)setVideoFrameRate:(NSInteger)videoFrameRate;
 - (nullable instancetype)initWithVideoStreamConfiguration:(nullable LFLiveVideoConfiguration *)configuration;
 - (void)setDelegate:(nullable id<LFVideoEncodingDelegate>)delegate;
 - (void)stopEncoder;

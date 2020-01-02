@@ -118,6 +118,10 @@
     return _currentVideoBitRate;
 }
 
+- (void)setVideoFrameRate:(NSInteger)videoFrameRate {
+    
+}
+
 - (void)setDelegate:(id<LFVideoEncodingDelegate>)delegate{
     _h264Delegate = delegate;
 }
